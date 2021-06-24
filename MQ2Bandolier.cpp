@@ -1,10 +1,10 @@
 //****************************************************************//
-// MQ2Exchange.cpp
+// MQ2Bandolier.cpp
 //****************************************************************//
 // 3.00 edited by: woobs 01/20/2014
 //    Include non-MQ2BagWindow components.
 /******************************************************************/
-#include "../MQ2Plugin.h"
+#include <mq/Plugin.h>
 #include "../moveitem2.h"
   
 PreSetup("MQ2Bandolier"); 
