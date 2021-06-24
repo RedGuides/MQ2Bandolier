@@ -5,7 +5,7 @@
 //    Include non-MQ2BagWindow components.
 /******************************************************************/
 #include <mq/Plugin.h>
-#include "../moveitem2.h"
+#include "moveitem.h"
 
 PreSetup("MQ2Bandolier");
 PLUGIN_VERSION(3.00);
