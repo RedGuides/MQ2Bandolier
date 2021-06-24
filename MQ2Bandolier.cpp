@@ -18,26 +18,6 @@ CHAR   Command[MAX_STRING];
 
 typedef void (__cdecl *MQ2Exchange)(PCHAR);
 
-PMQPLUGIN CheckForExchange() {
-	PMQPLUGIN pLook=pPlugins;
-	while (pLook && _strnicmp(pLook->szFilename,"mq2exchange",11)) pLook=pLook->pNext;
-	return pLook;
-}
-
-MQ2Exchange GetExchangeEntry() {
-	MQ2Exchange pFind=NULL;
-	PMQPLUGIN pLook=CheckForExchange();
-	if (pLook) pFind=(MQ2Exchange)GetProcAddress(pLook->hModule,"doExchange");
-	return pFind;
-}
-
-MQ2Exchange GetUnequipEntry() {
-	MQ2Exchange pFind=NULL;
-	PMQPLUGIN pLook=CheckForExchange();
-	if (pLook) pFind=(MQ2Exchange)GetProcAddress(pLook->hModule,"doUnequip");
-	return pFind;
-}
-
 long FindSlotID(PCHAR ID) {
 	if (IsNumber(ID)) {
 		long Result=atoi(ID);
@@ -50,9 +30,11 @@ long FindSlotID(PCHAR ID) {
 
 bool FindStorage(long Size) {
 	for (int iSlot=BAG_SLOT_START; iSlot < NUM_INV_SLOTS; iSlot++) {
-		if (PCONTENTS cSlot=GetCharInfo2()->pInventoryArray->InventoryArray[iSlot]) {
-			if (TypePack(cSlot) && (GetItemFromContents(cSlot)->Combine != 2) && Size <= GetItemFromContents(cSlot)->SizeCapacity) {
-				if (!cSlot->Contents.ContainedItems.pItems) return true;
+		if (PCONTENTS cSlot = GetPcProfile()->GetInventorySlot(iSlot)) {
+			auto item = GetItemFromContents(cSlot);
+			if (cSlot->IsContainer() && item->Combine != 2 && Size <= item->SizeCapacity) {
+				if (cSlot->IsEmpty())
+					return true;
 				for (int iPack=0; iPack < GetItemFromContents(cSlot)->Slots; iPack++) {
 					if (!cSlot->GetContent(iPack)) return true;
 				}
@@ -75,8 +57,8 @@ void CreateSet(PSPAWNINFO pChar, PCHAR szLine)
 			slotNumber=FindSlotID(szArg2);
 			if (!(slotNumber<0)) {
 				sprintf_s(szArg2,"%d",slotNumber);
-				if (GetCharInfo2()->pInventoryArray->InventoryArray[slotNumber]) {
-					sprintf_s(szArg3, "%d", GetItemFromContents(GetCharInfo2()->pInventoryArray->InventoryArray[slotNumber])->ItemNumber);
+				if (auto item = GetPcProfile()->GetInventorySlot(slotNumber)) {
+					sprintf_s(szArg3, "%d", GetItemFromContents(item)->ItemNumber);
 					WritePrivateProfileString(szArg1,szArg2,szArg3,INIFileName);
 					setCreated=true;
 				}
@@ -107,14 +89,14 @@ VOID EquipSet(PSPAWNINFO pChar, PCHAR szLine)
 	}
 	CHAR EquipList[189] = {0};
 	CHAR szSlot[5] = {0};
-	MQ2Exchange CallExchange=GetExchangeEntry();
-	MQ2Exchange CallUnequip=GetUnequipEntry();
+	MQ2Exchange CallExchange = (MQ2Exchange)GetPluginProc("mq2exchange", "doExchange");
+	MQ2Exchange CallUnequip = (MQ2Exchange)GetPluginProc("mq2exchange", "doUnequip");
 	if (!CallExchange || !CallUnequip) {
-		if (!CheckForExchange()) MacroError("MQ2Bandolier: MQ2Exchange plugin not loaded");
+		if (!IsPluginLoaded("mq2exchange")) MacroError("MQ2Bandolier: MQ2Exchange plugin not loaded");
 		else MacroError("MQ2Bandolier: You need to update MQ2Exchange.");
 		return;
 	}
-	if (GetCharInfo2()->pInventoryArray->Inventory.Cursor) {
+	if (ItemOnCursor()) {
 		MacroError("MQ2Bandolier: Your mouse pointer must be clear to equip something.");
 		return;
 	}
@@ -147,16 +129,18 @@ VOID EquipSet(PSPAWNINFO pChar, PCHAR szLine)
 				if (ItemFind(&cItem, szTempItem, BAG_SLOT_START, NUM_INV_SLOTS)) {
 					PCONTENTS fItem = cItem.pItem;
 					if (atoi(pEquipList)==13) {
-						long type=GetItemFromContents(fItem)->ItemType;
-						if (type==1 || type==4 || type==35) {
-							if (PCONTENTS sec=GetCharInfo2()->pInventoryArray->Inventory.Secondary) {
-								CallUnequip("offhand");
+						if (auto item = GetItemFromContents(fItem))
+						{
+							if (item->Type == 1 || item->Type == 4 || item->Type == 35) {
+								if (GetPcProfile()->GetInventorySlot(InvSlot_Secondary)) {
+									CallUnequip("offhand");
+								}
 							}
 						}
 					}
 					if (atoi(pEquipList)==14) {
-						if (PCONTENTS primary=GetCharInfo2()->pInventoryArray->Inventory.Primary) {
-						long type=GetItemFromContents(primary)->ItemType;
+						if (PCONTENTS primary = GetPcProfile()->GetInventorySlot(InvSlot_Primary)) {
+							long type=GetItemFromContents(primary)->ItemType;
 							if (type==1 || type==4 || type==35) {
 								CallUnequip("mainhand");
 							}
@@ -196,6 +180,6 @@ PLUGIN_API VOID SetGameState(DWORD GameState)
 {
 	DebugSpewAlways("SetGameState MQ2Bandolier");
 	if(GameState==GAMESTATE_INGAME) {
-		sprintf_s(INIFileName,"%s\\MQ2Bandolier_%s.ini",gszINIPath,GetCharInfo()->Name);
+		sprintf_s(INIFileName, "%s\\MQ2Bandolier_%s.ini", gPathConfig, GetCharInfo()->Name);
 	}
 }
